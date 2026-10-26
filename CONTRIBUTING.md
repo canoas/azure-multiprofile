@@ -50,3 +50,31 @@ src/commands/               one module per command group
 - Never edit rc-file lines outside the managed block.
 - Every `doctor` fix must list the files it writes so `--undo` can restore them.
 - Add a test for every bug fix.
+
+## Releasing (maintainers)
+
+Releases are published by `.github/workflows/release.yml` when a version tag is
+pushed. That workflow runs the full test matrix first.
+
+| Tag | npm dist-tag | Install with |
+|---|---|---|
+| `v0.2.0-rc.1`, `v0.2.0-beta.1` | `next` (stage) | `npm i -g azure-multiprofile@next` |
+| `v0.2.0` | `latest` | `npm i -g azure-multiprofile` |
+
+```sh
+# Stage a release candidate
+npm version prerelease --preid rc     # 0.1.0 -> 0.1.1-rc.0, commits and tags
+git push --follow-tags                # -> published to @next, GitHub pre-release
+
+# Promote: release the final version once the candidate looks good
+npm version patch                     # 0.1.1-rc.0 -> 0.1.1
+git push --follow-tags                # -> published to @latest
+```
+
+Update `CHANGELOG.md` before tagging a final release. The workflow refuses a tag
+that doesn't match `package.json`, and a version that's already on npm.
+
+Publishing uses npm [trusted publishing](https://docs.npmjs.com/trusted-publishers),
+so no npm token is stored in GitHub. One-time setup: on npmjs.com go to the
+package → Settings → Trusted publishing → GitHub Actions, then enter owner
+`canoas`, repository `azure-multiprofile` and workflow `release.yml`.

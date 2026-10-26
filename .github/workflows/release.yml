@@ -1,0 +1,86 @@
+name: release
+
+# Push a version tag to release:
+#   v0.2.0-rc.1, v0.2.0-beta.2  ->  npm dist-tag "next"   (stage: npm i -g azure-multiprofile@next)
+#   v0.2.0                      ->  npm dist-tag "latest" (production)
+#
+# Publishing uses npm trusted publishing (OIDC): no NPM_TOKEN secret is stored.
+# One-time setup on npmjs.com -> azure-multiprofile -> Settings -> Trusted publishing:
+#   GitHub Actions, owner "canoas", repo "azure-multiprofile", workflow "release.yml".
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  test:
+    uses: ./.github/workflows/test.yml
+
+  publish:
+    needs: test
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # create the GitHub release
+      id-token: write # npm trusted publishing + provenance
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          registry-url: https://registry.npmjs.org
+
+      # Trusted publishing needs npm 11.5.1 or newer.
+      - run: npm install -g npm@^11.5.1
+
+      - name: Resolve version and channel
+        id: meta
+        run: |
+          tag="${GITHUB_REF_NAME#v}"
+          version="$(node -p "require('./package.json').version")"
+          if [ "$tag" != "$version" ]; then
+            echo "::error::Tag v$tag does not match package.json version $version"
+            exit 1
+          fi
+          if [[ "$version" == *-* ]]; then
+            echo "channel=next" >> "$GITHUB_OUTPUT"
+            echo "prerelease=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "channel=latest" >> "$GITHUB_OUTPUT"
+            echo "prerelease=false" >> "$GITHUB_OUTPUT"
+          fi
+          if npm view "azure-multiprofile@$version" version >/dev/null 2>&1; then
+            echo "::error::azure-multiprofile@$version is already on npm"
+            exit 1
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+      - run: npm ci
+
+      - name: Publish to npm (${{ steps.meta.outputs.channel }})
+        run: npm publish --access public --tag ${{ steps.meta.outputs.channel }}
+
+      - name: Smoke test the published package
+        run: |
+          for _ in 1 2 3 4 5 6; do
+            npm view "azure-multiprofile@${{ steps.meta.outputs.version }}" version && break
+            sleep 10
+          done
+          npx --yes "azure-multiprofile@${{ steps.meta.outputs.version }}" --version
+
+      - name: Create GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          flags=(--generate-notes --verify-tag)
+          if [ "${{ steps.meta.outputs.prerelease }}" = "true" ]; then flags+=(--prerelease); fi
+          gh release create "$GITHUB_REF_NAME" "${flags[@]}" \
+            --title "$GITHUB_REF_NAME" \
+            --notes "Install: \`npm install -g azure-multiprofile@${{ steps.meta.outputs.channel }}\`"
