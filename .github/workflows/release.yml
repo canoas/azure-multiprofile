@@ -1,12 +1,17 @@
 name: release
 
-# Push a version tag to release:
-#   v0.2.0-rc.1, v0.2.0-beta.2  ->  npm dist-tag "next"   (stage: npm i -g azure-multiprofile@next)
-#   v0.2.0                      ->  npm dist-tag "latest" (production)
+# Push a version tag to stage a release on npm:
+#   v0.2.0-rc.1, v0.2.0-beta.2  ->  npm dist-tag "next"   (npm i -g azure-multiprofile@next)
+#   v0.2.0                      ->  npm dist-tag "latest" (npm i -g azure-multiprofile)
 #
-# Publishing uses npm trusted publishing (OIDC): no NPM_TOKEN secret is stored.
-# One-time setup on npmjs.com -> azure-multiprofile -> Settings -> Trusted publishing:
-#   GitHub Actions, owner "canoas", repo "azure-multiprofile", workflow "release.yml".
+# CI only *stages* the version (npm stage publish). Nothing is installable until a
+# maintainer approves it with 2FA:  npm stage list azure-multiprofile
+#                                   npm stage approve <stage-id>
+# Then publish the draft GitHub release this workflow creates.
+#
+# Auth is npm trusted publishing (OIDC), so no NPM_TOKEN secret is stored. One-time setup:
+#   npx npm@11 trust github azure-multiprofile --repo canoas/azure-multiprofile \
+#     --file release.yml --allow-stage-publish
 
 on:
   push:
@@ -30,15 +35,15 @@ jobs:
       contents: write # create the GitHub release
       id-token: write # npm trusted publishing + provenance
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v5
         with:
           node-version: 22
           registry-url: https://registry.npmjs.org
 
-      # Trusted publishing needs npm 11.5.1 or newer.
-      - run: npm install -g npm@^11.5.1
+      # Trusted publishing and `npm stage` need a current npm 11.
+      - run: npm install -g npm@11
 
       - name: Resolve version and channel
         id: meta
@@ -64,22 +69,40 @@ jobs:
 
       - run: npm ci
 
-      - name: Publish to npm (${{ steps.meta.outputs.channel }})
-        run: npm publish --access public --tag ${{ steps.meta.outputs.channel }}
-
-      - name: Smoke test the published package
+      - name: Stage on npm (${{ steps.meta.outputs.channel }})
         run: |
-          for _ in 1 2 3 4 5 6; do
-            npm view "azure-multiprofile@${{ steps.meta.outputs.version }}" version && break
-            sleep 10
-          done
-          npx --yes "azure-multiprofile@${{ steps.meta.outputs.version }}" --version
+          set -o pipefail
+          npm stage publish --access public --tag ${{ steps.meta.outputs.channel }} 2>&1 | tee stage.log
 
-      - name: Create GitHub release
+      - name: Approval instructions
+        if: always()
+        run: |
+          {
+            echo "## azure-multiprofile@${{ steps.meta.outputs.version }} staged for \`${{ steps.meta.outputs.channel }}\`"
+            echo
+            echo "Nothing is installable yet. Approve it with your passkey/2FA:"
+            echo
+            echo '```sh'
+            echo "npm stage list azure-multiprofile"
+            echo "npm stage approve <stage-id>      # or: npm stage reject <stage-id>"
+            echo "npm view azure-multiprofile dist-tags"
+            echo '```'
+            echo
+            echo "Then publish the draft GitHub release for $GITHUB_REF_NAME."
+            echo
+            echo '<details><summary>npm output</summary>'
+            echo
+            echo '```'
+            cat stage.log 2>/dev/null || true
+            echo '```'
+            echo '</details>'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Create draft GitHub release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          flags=(--generate-notes --verify-tag)
+          flags=(--draft --generate-notes --verify-tag)
           if [ "${{ steps.meta.outputs.prerelease }}" = "true" ]; then flags+=(--prerelease); fi
           gh release create "$GITHUB_REF_NAME" "${flags[@]}" \
             --title "$GITHUB_REF_NAME" \

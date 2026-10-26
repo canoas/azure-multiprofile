@@ -53,28 +53,43 @@ src/commands/               one module per command group
 
 ## Releasing (maintainers)
 
-Releases are published by `.github/workflows/release.yml` when a version tag is
-pushed. That workflow runs the full test matrix first.
+Releases go through `.github/workflows/release.yml` when a version tag is pushed.
+It runs the full test matrix, then **stages** the version on npm with
+[`npm stage publish`](https://docs.npmjs.com/cli/commands/npm-stage). A staged
+version can't be installed until a maintainer approves it with 2FA.
 
-| Tag | npm dist-tag | Install with |
+| Tag | npm dist-tag after approval | Install with |
 |---|---|---|
-| `v0.2.0-rc.1`, `v0.2.0-beta.1` | `next` (stage) | `npm i -g azure-multiprofile@next` |
+| `v0.2.0-rc.1`, `v0.2.0-beta.1` | `next` | `npm i -g azure-multiprofile@next` |
 | `v0.2.0` | `latest` | `npm i -g azure-multiprofile` |
 
 ```sh
-# Stage a release candidate
-npm version prerelease --preid rc     # 0.1.0 -> 0.1.1-rc.0, commits and tags
-git push --follow-tags                # -> published to @next, GitHub pre-release
+# 1. Tag. CI tests, then stages to npm and creates a draft GitHub release
+npm version prerelease --preid rc     # e.g. 0.1.1-rc.2; commits and tags
+git push origin main "v$(node -p "require('./package.json').version")"
 
-# Promote: release the final version once the candidate looks good
-npm version patch                     # 0.1.1-rc.0 -> 0.1.1
-git push --follow-tags                # -> published to @latest
+# 2. Approve from a normal terminal (needs your passkey/2FA)
+npm stage list azure-multiprofile
+npm stage approve <stage-id>          # or: npm stage reject <stage-id>
+
+# 3. Check, then publish the draft release on GitHub
+npm view azure-multiprofile dist-tags
+gh release edit "v<version>" --draft=false
+
+# Final release: same steps, starting with `npm version patch|minor|major`
 ```
 
-Update `CHANGELOG.md` before tagging a final release. The workflow refuses a tag
-that doesn't match `package.json`, and a version that's already on npm.
+Push only the new tag (as above) rather than `--follow-tags`, so older local tags
+don't trigger the workflow again. Release tags are protected and can't be moved,
+so if a release goes wrong, bump to the next version instead of re-tagging. Update
+`CHANGELOG.md` before tagging a final release. The workflow refuses a tag that
+doesn't match `package.json`, and a version that's already on npm.
 
-Publishing uses npm [trusted publishing](https://docs.npmjs.com/trusted-publishers),
-so no npm token is stored in GitHub. One-time setup: on npmjs.com go to the
-package → Settings → Trusted publishing → GitHub Actions, then enter owner
-`canoas`, repository `azure-multiprofile` and workflow `release.yml`.
+Auth uses npm [trusted publishing](https://docs.npmjs.com/trusted-publishers),
+so no npm token is stored in GitHub. The trust relationship only allows staging:
+
+```sh
+npx npm@11 trust github azure-multiprofile --repo canoas/azure-multiprofile \
+  --file release.yml --allow-stage-publish
+npx npm@11 trust list azure-multiprofile
+```
