@@ -1,0 +1,47 @@
+{
+  "name": "azure-multiprofile",
+  "version": "0.1.0",
+  "description": "Run several Azure CLI (and azd) accounts side by side, each in its own isolated profile.",
+  "keywords": [
+    "azure",
+    "azure-cli",
+    "az",
+    "azd",
+    "profiles",
+    "multi-account",
+    "tenants",
+    "AZURE_CONFIG_DIR"
+  ],
+  "license": "MIT",
+  "author": "Jose Antonio Silva",
+  "homepage": "https://github.com/canoas/azure-multiprofile#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/canoas/azure-multiprofile.git"
+  },
+  "bugs": {
+    "url": "https://github.com/canoas/azure-multiprofile/issues"
+  },
+  "type": "module",
+  "bin": {
+    "azure-multiprofile": "bin/azure-multiprofile.js",
+    "azmp": "bin/azure-multiprofile.js"
+  },
+  "files": [
+    "bin/",
+    "src/",
+    "README.md",
+    "LICENSE",
+    "CHANGELOG.md",
+    "SECURITY.md"
+  ],
+  "engines": {
+    "node": ">=20.17"
+  },
+  "scripts": {
+    "test": "node --test"
+  },
+  "dependencies": {
+    "@inquirer/prompts": "^8.7.4"
+  }
+}
