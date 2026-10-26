@@ -5,6 +5,7 @@ import { profileEnv, mergeEnv, run, readAccount } from '../azcli.js';
 import { renderEnv } from '../shell/index.js';
 import { isWindows, samePath, validateName, tildify, DEFAULT_PROFILE } from '../paths.js';
 import { out, err, green, dim, usageError } from '../ui.js';
+import { inspectShell, currentShell } from '../rcfile.js';
 
 export const LINK_FILE = '.azprofile';
 
@@ -43,10 +44,23 @@ export async function login(args) {
 
 export async function use(positionals, _opts, { command }) {
   const name = positionals[0];
-  const how = command === 'off' ? 'azmp off' : `azmp use ${name ?? '<profile>'}`;
-  err(`\`${how}\` changes your current shell, so it needs the shell integration.`);
-  err('Set it up with:   azure-multiprofile setup     (then open a new terminal)');
-  if (command !== 'off' && name) {
+  const how = command === 'use' ? `azmp use ${name ?? '<profile>'}` : `azmp ${command}`;
+  err(`\`${how}\` changes your current shell, but the azmp shell integration is not loaded here.`);
+  const installed = new Set(['zsh', 'bash', 'fish', 'pwsh'].filter((s) => inspectShell(s).blocks));
+  if (installed.size) {
+    err("It is installed in your rc file; open a new terminal, or load it now with:");
+    const sh = currentShell();
+    err(
+      sh === 'fish'
+        ? '  azure-multiprofile init fish | source'
+        : sh === 'pwsh'
+          ? '  Invoke-Expression (& azure-multiprofile init pwsh | Out-String)'
+          : `  eval "$(azure-multiprofile init ${sh})"`,
+    );
+  } else {
+    err('Set it up with:   azure-multiprofile setup     (then open a new terminal)');
+  }
+  if (command === 'use' && name) {
     const sample = isWindows()
       ? `Invoke-Expression (azure-multiprofile env ${name} | Out-String)`
       : `eval "$(azure-multiprofile env ${name})"`;

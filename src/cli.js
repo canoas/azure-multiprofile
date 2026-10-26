@@ -72,6 +72,7 @@ const COMMANDS = {
   login: { load: () => import('./commands/env.js'), fn: 'login', raw: true },
   use: { load: () => import('./commands/env.js'), fn: 'use', options: {} },
   off: { load: () => import('./commands/env.js'), fn: 'use', options: {} },
+  reload: { load: () => import('./commands/env.js'), fn: 'use', options: {} },
   link: { load: () => import('./commands/env.js'), fn: 'link', options: { force: { type: 'boolean' } } },
   unlink: { load: () => import('./commands/env.js'), fn: 'unlink', options: {} },
   current: {

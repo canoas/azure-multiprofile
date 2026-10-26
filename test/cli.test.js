@@ -119,6 +119,11 @@ test('use without shell integration explains how to set it up', () => {
   const r = sb.run(['use', 'work']);
   assert.equal(r.code, 1);
   assert.match(r.stderr, /azure-multiprofile setup/);
+  const reload = sb.run(['reload']);
+  assert.equal(reload.code, 1);
+  assert.match(reload.stderr, /`azmp reload` changes your current shell/);
+  sb.run(['setup', '--shell', 'bash']);
+  assert.match(sb.run(['reload']).stderr, /open a new terminal, or load it now with:\n {2}eval "\$\(azure-multiprofile init bash\)"/);
 });
 
 test('link, current and unlink', () => {
