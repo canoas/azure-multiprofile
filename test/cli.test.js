@@ -241,3 +241,37 @@ test('setup installs and uninstalls the rc block idempotently', () => {
   sb.run(['setup', '--shell', 'pwsh']);
   assert.match(fs.readFileSync(sb.env.AZMP_PWSH_PROFILE, 'utf8'), /init pwsh/);
 });
+
+test('wizard folder answers: bare names go under home, never the current directory', async () => {
+  process.env.AZMP_HOME = sb.home;
+  try {
+    const { resolveFolderAnswer } = await import('../src/commands/add.js');
+    const fallback = path.join(sb.home, '.azure-x');
+    assert.equal(resolveFolderAnswer('', fallback), fallback);
+    assert.equal(resolveFolderAnswer('azure-client-tweakhub', fallback), path.join(sb.home, 'azure-client-tweakhub'));
+    assert.equal(resolveFolderAnswer('~/.azure-y', fallback), path.join(sb.home, '.azure-y'));
+    assert.equal(resolveFolderAnswer('/abs/dir', fallback), path.resolve('/abs/dir'));
+  } finally {
+    delete process.env.AZMP_HOME;
+  }
+});
+
+test('add refuses to put a profile under the Windows system folder', () => {
+  const sysRoot = path.join(sb.root, 'Windows');
+  const env = { AZMP_TEST_PLATFORM: 'win32', SystemRoot: sysRoot };
+  const r = sb.run(['add', 'client-a', '--dir', path.join(sysRoot, 'System32', 'azure-client'), '--yes', '--no-shell'], { env });
+  assert.equal(r.code, 2);
+  assert.match(r.stderr, /Refusing to keep sign-ins under/);
+  assert.equal(sb.run(['add', 'client-a', '--yes', '--no-shell'], { env }).code, 0);
+});
+
+test('add lists the sign-in step when sign-in was requested but did not happen', () => {
+  const env = { PATH: path.dirname(process.execPath) }; // no az on PATH
+  const r = sb.run(['add', 'contoso', '--tenant', 'contoso.onmicrosoft.com', '--yes', '--no-shell'], { env });
+  assert.equal(r.code, 0, r.stderr);
+  assert.match(r.stderr, /az was not found on PATH/);
+  assert.match(r.stdout, /azmp login contoso --tenant contoso\.onmicrosoft\.com\s+sign in/);
+  assert.match(r.stdout, /use the profile name "contoso"/);
+  const win = sb.run(['add', 'other', '--yes', '--no-shell'], { env: { AZMP_TEST_PLATFORM: 'win32' } });
+  assert.match(win.stdout, /In cmd\.exe use: azmp exec other -- az account show/);
+});

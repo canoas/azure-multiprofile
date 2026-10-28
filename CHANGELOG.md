@@ -6,6 +6,23 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Fixed
+- `add` wizard: a folder typed as a bare name (e.g. `my-folder`) is now created in the
+  home folder instead of the current directory, which was `C:\Windows\System32` in an
+  elevated `cmd`. The wizard previews the full path as you type.
+- `add` refuses to create profile folders under the Windows system folder.
+- `add` keeps the `azmp login` step in "Next steps" when sign-in was requested but
+  skipped (for example because `az` is not on PATH), including the `--tenant` you passed.
+- `azmp reload` / `use` / `off` without shell integration now explain how to load it
+  instead of "Unknown command".
+
+### Changed
+- Clearer wizard wording: the profile name is what you type in commands, and the folder
+  only stores az data. "Next steps" says which name to use, and on Windows how to run
+  commands from `cmd.exe`.
+- README: new "Profile name vs. folder" section; Windows notes cover `cmd.exe`,
+  Administrator terminals and a missing `az`.
+
 ## [0.1.0] - Unreleased
 
 ### Added

@@ -1,4 +1,5 @@
 import fs from 'node:fs';
+import path from 'node:path';
 import { loadRegistry, saveRegistry, allProfiles } from '../registry.js';
 import {
   DEFAULT_PROFILE,
@@ -6,6 +7,8 @@ import {
   azdDirFor,
   defaultAzureDir,
   expandHome,
+  home,
+  isWindows,
   samePath,
   tildify,
   validateName,
@@ -32,9 +35,17 @@ export default async function add([nameArg], opts) {
     return null;
   };
 
+  if (ask) {
+    out(dim('A profile has a short name you type in commands (azmp use <name>, az-<name>)'));
+    out(dim('and a folder where az keeps that account\'s sign-in and settings.\n'));
+  }
+
   let name = nameArg;
   if (!name && ask) {
-    name = await ask.input({ message: 'Profile name (e.g. work, client-a):', validate: (v) => nameProblem(v) ?? true });
+    name = await ask.input({
+      message: 'Profile name — what you will type in commands (e.g. work, contoso):',
+      validate: (v) => nameProblem(v) ?? true,
+    });
   }
   if (!name) throw usageError('Usage: azure-multiprofile add <name> [--dir PATH] [--azd] [--seed] [--login] [--yes]');
   const problem = nameProblem(name);
@@ -42,21 +53,26 @@ export default async function add([nameArg], opts) {
 
   const dirTaken = (dir) => allProfiles(reg).find((p) => samePath(p.azureConfigDir, dir) || samePath(p.azdConfigDir, dir));
 
+  // --dir follows CLI convention (relative to the current directory); a bare
+  // folder typed into the wizard goes under the home folder instead, so running
+  // from e.g. C:\Windows\System32 never puts sign-ins there.
   let azureConfigDir = opts.dir ? expandHome(opts.dir) : azureDirFor(name);
   if (!opts.dir && ask) {
-    azureConfigDir = expandHome(
+    const fromAnswer = (v) => resolveFolderAnswer(v, azureConfigDir);
+    azureConfigDir = fromAnswer(
       await ask.input({
-        message: 'Azure CLI folder for this profile:',
+        message: 'Folder for this profile\'s az data (press Enter to use the default):',
         default: tildify(azureConfigDir),
-        validate: (v) => {
-          const taken = dirTaken(expandHome(v));
-          return taken ? `Already used by profile "${taken.name}".` : true;
+        transformer: (v, { isFinal }) => {
+          const full = fromAnswer(v);
+          return isFinal || !v.trim() || tildify(full) === v.trim() ? v : `${v}  → ${tildify(full)}`;
         },
+        validate: (v) => folderProblem(fromAnswer(v), dirTaken) ?? true,
       }),
     );
   }
-  const taken = dirTaken(azureConfigDir);
-  if (taken) throw usageError(`${tildify(azureConfigDir)} is already used by profile "${taken.name}".`);
+  const problemDir = folderProblem(azureConfigDir, dirTaken);
+  if (problemDir) throw usageError(problemDir);
 
   let azd = flag(opts, 'azd');
   if (azd === undefined) {
@@ -154,18 +170,22 @@ export default async function add([nameArg], opts) {
       if (tenant.trim()) loginArgs.push('--tenant', tenant.trim());
     }
   }
+  let signedIn = false;
   if (login) {
-    if (!which('az')) err('az was not found on PATH; skipping sign-in.');
-    else {
+    if (!which('az')) {
+      err('az was not found on PATH; skipping sign-in. Install it from https://aka.ms/azcli, then open a new terminal.');
+    } else {
       const code = await run('az', ['login', ...loginArgs], environment);
-      if (code !== 0) err(`az login exited with ${code}. Retry with: azmp login ${name}`);
+      if (code !== 0) err(`az login exited with ${code}.`);
+      signedIn = code === 0;
     }
   }
 
+  const retryLogin = [`azmp login ${name}`, ...loginArgs].join(' ');
   out('');
-  out(bold('Next steps'));
+  out(bold(`Next steps — use the profile name "${name}" in every command`));
   const steps = [
-    ...(login ? [] : [[`azmp login ${name}`, 'sign in']]),
+    ...(signedIn ? [] : [[retryLogin, 'sign in']]),
     ['azmp reload', 'load the new profile into open shells'],
     [`azmp use ${name}`, 'switch this shell'],
     [`az-${name} account show`, 'one-off command'],
@@ -173,5 +193,29 @@ export default async function add([nameArg], opts) {
   ];
   const width = Math.max(...steps.map(([c]) => c.length)) + 3;
   for (const [cmd, what] of steps) out(`  ${cmd.padEnd(width)}${dim(what)}`);
+  if (isWindows()) {
+    out(dim(`  azmp use and az-${name} need PowerShell. In cmd.exe use: azmp exec ${name} -- az account show`));
+  }
   return 0;
+}
+
+/** Wizard answer -> absolute folder. Relative answers live under the home folder. */
+export function resolveFolderAnswer(answer, fallback) {
+  const v = answer.trim();
+  if (!v) return fallback;
+  if (v === '~' || v.startsWith('~/') || v.startsWith('~\\') || path.isAbsolute(v)) return expandHome(v);
+  return path.join(home(), v);
+}
+
+function folderProblem(dir, dirTaken) {
+  const taken = dirTaken(dir);
+  if (taken) return `${tildify(dir)} is already used by profile "${taken.name}".`;
+  if (isWindows()) {
+    const sysRoot = process.env.SystemRoot || 'C:\\Windows';
+    const rel = path.relative(sysRoot.toLowerCase(), dir.toLowerCase());
+    if (rel === '' || (!rel.startsWith('..') && !path.isAbsolute(rel))) {
+      return `Refusing to keep sign-ins under ${sysRoot}. Choose a folder in your user profile (the default is fine).`;
+    }
+  }
+  return null;
 }

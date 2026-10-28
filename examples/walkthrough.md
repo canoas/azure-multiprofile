@@ -8,8 +8,8 @@ account and a customer tenant. Output is shortened.
 ```console
 $ npm install -g azure-multiprofile
 $ azmp add
-? Profile name (e.g. work, client-a): work
-? Azure CLI folder for this profile: ~/.azure-work
+? Profile name — what you will type in commands (e.g. work, contoso): work
+? Folder for this profile's az data (press Enter to use the default): ~/.azure-work
 ? Also isolate the Azure Developer CLI (azd) login? Yes
 ? Copy your az settings from ~/.azure? (settings only — never sign-ins or tokens) Yes
 ? Install your 2 az extension(s) in the new profile (aks-preview, containerapp)? No
@@ -27,8 +27,8 @@ $ azmp add
 ## 2. A second profile, without the wizard
 
 ```console
-$ azmp add client-a --tenant fabrikam.onmicrosoft.com --device-code --yes
-✓ Created profile client-a → ~/.azure-client-a
+$ azmp add fabrikam --tenant fabrikam.onmicrosoft.com --device-code --yes
+✓ Created profile fabrikam → ~/.azure-fabrikam
 To sign in, use a web browser to open the page https://microsoft.com/devicelogin ...
 ```
 
@@ -39,7 +39,7 @@ $ exec zsh            # load the integration
 $ azmp list
    PROFILE   SIGNED IN AS        SUBSCRIPTION    AZURE_CONFIG_DIR   AZD_CONFIG_DIR
    default   me@outlook.com      Pay-As-You-Go   ~/.azure           shared
-   client-a  jose@fabrikam.com   Fabrikam-Dev    ~/.azure-client-a  shared
+   fabrikam  jose@fabrikam.com   Fabrikam-Dev    ~/.azure-fabrikam  shared
    work      jose@contoso.com    Contoso-Prod    ~/.azure-work      ~/.azd-work
 ```
 
@@ -50,7 +50,7 @@ $ az account show --query user.name -o tsv          # default
 me@outlook.com
 $ az-work account show --query user.name -o tsv     # one-off
 jose@contoso.com
-$ azmp use client-a                                 # this terminal only
+$ azmp use fabrikam                                 # this terminal only
 $ az account show --query user.name -o tsv
 jose@fabrikam.com
 ```
@@ -61,12 +61,12 @@ In a second terminal, `az` is still on `default`. Nothing is shared.
 
 ```console
 $ cd ~/src/fabrikam-api
-$ azmp link client-a
-✓ Linked ~/src/fabrikam-api to profile "client-a".
+$ azmp link fabrikam
+✓ Linked ~/src/fabrikam-api to profile "fabrikam".
 $ cd ~ && echo $AZMP_PROFILE
                                    # back to whatever you had before
 $ cd ~/src/fabrikam-api/infra && echo $AZMP_PROFILE
-client-a
+fabrikam
 $ terraform plan                   # azurerm uses jose@fabrikam.com
 ```
 
@@ -102,8 +102,8 @@ $ azmp doctor --fix
 ## 8. Clean up
 
 ```console
-$ azmp remove client-a --delete-data
-? Remove profile "client-a"? Yes
-? Delete ~/.azure-client-a (sign-in tokens and settings)? Yes
+$ azmp remove fabrikam --delete-data
+? Remove profile "fabrikam"? Yes
+? Delete ~/.azure-fabrikam (sign-in tokens and settings)? Yes
 $ azmp setup --uninstall            # removes the ~/.zshrc block
 ```

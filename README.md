@@ -10,12 +10,12 @@ Run several **Azure CLI** (`az`) and **Azure Developer CLI** (`azd`) accounts on
 $ azmp list
    PROFILE   SIGNED IN AS           SUBSCRIPTION      AZURE_CONFIG_DIR   AZD_CONFIG_DIR
    default   me@outlook.com         Pay-As-You-Go     ~/.azure           shared
+   fabrikam  jose@fabrikam.com      Fabrikam-Dev      ~/.azure-fabrikam  shared
 *  work      jose@contoso.com       Contoso-Prod      ~/.azure-work      ~/.azd-work
-   client-a  jose@fabrikam.com      Fabrikam-Dev      ~/.azure-client-a  shared
 
-$ az-client-a group list -o table      # one-off command as client-a
+$ az-fabrikam group list -o table      # one-off command as fabrikam
 $ azmp use work                        # switch this terminal to work
-$ cd ~/src/fabrikam-api                # folder linked to client-a: switches automatically
+$ cd ~/src/fabrikam-api                # folder linked to fabrikam: switches automatically
 ```
 
 > Community project. Not affiliated with or supported by Microsoft.
@@ -49,16 +49,33 @@ azmp add          # wizard: name, folders, azd, copy settings, shell setup, sign
 
 ```sh
 azmp add work --azd --seed --login     # create, copy settings from ~/.azure, sign in
-azmp add client-a --tenant fabrikam.onmicrosoft.com   # implies --login
+azmp add fabrikam --tenant fabrikam.onmicrosoft.com   # implies --login
 azmp setup                             # add shell integration to your rc file (the wizard offers this too)
 exec $SHELL                            # or open a new terminal
 
 azmp use work && az account show       # this terminal is now "work"
-az-client-a account show               # one command as client-a; the shell stays on "work"
+az-fabrikam account show               # one command as fabrikam; the shell stays on "work"
 azmp off                               # back to ~/.azure
 ```
 
 The untouched `~/.azure` is always available as the profile named **`default`**.
+
+### Profile name vs. folder
+
+Each profile has two things, and only the **name** shows up in commands:
+
+| | Example | Used for |
+|---|---|---|
+| **Name** | `fabrikam` | Everything you type: `azmp use fabrikam`, `az-fabrikam …`, `azmp login fabrikam`, `.azprofile` |
+| **Folder** | `~/.azure-fabrikam` | Where `az` stores that account's sign-in and settings. You never type it again |
+
+Pick a short name for the account or customer (`work`, `contoso`, `fabrikam`). The tenant goes in `--tenant` when you sign in, not in the name or the folder. For the folder, just press Enter to accept the default `~/.azure-<name>`. If you type a different folder in the wizard, a bare name such as `my-folder` is created in your home folder (the wizard shows the full path as you type). `--dir` on the command line follows normal CLI rules and is relative to the current directory.
+
+```console
+$ azmp add fabrikam --tenant fabrikam.onmicrosoft.com
+? Folder for this profile's az data (press Enter to use the default): (~/.azure-fabrikam)   ← just press Enter
+✓ Created profile fabrikam → ~/.azure-fabrikam
+```
 
 ## How it works
 
@@ -97,10 +114,10 @@ Lines outside the `# >>> azure-multiprofile >>>` markers are never modified. `az
 
 ```sh
 cd ~/src/fabrikam-api
-azmp link client-a       # writes .azprofile containing "client-a"
+azmp link fabrikam       # writes .azprofile containing "fabrikam"
 ```
 
-When you `cd` into that folder or any subfolder, the shell switches to `client-a`. When you leave, it restores whatever was active before. An explicit `azmp use` overrides links until you run `azmp off`. Set `AZMP_NO_AUTO=1` to turn auto-switching off. You can commit `.azprofile` so teammates with the same profile names get the same behavior, or add it to `.gitignore`.
+When you `cd` into that folder or any subfolder, the shell switches to `fabrikam`. When you leave, it restores whatever was active before. An explicit `azmp use` overrides links until you run `azmp off`. Set `AZMP_NO_AUTO=1` to turn auto-switching off. You can commit `.azprofile` so teammates with the same profile names get the same behavior, or add it to `.gitignore`.
 
 Outside an interactive shell (CI, scripts, Makefiles), use `azmp exec <name> -- …`, or `eval "$(azmp env <name>)"`.
 
@@ -173,7 +190,18 @@ Every `--fix` run first snapshots each file it will touch. `azmp doctor --undo` 
 
 ## Windows notes
 
-- Use PowerShell 7 (`pwsh`). `azmp setup --shell pwsh` adds the integration to `$PROFILE`.
+- **Use PowerShell 7 (`pwsh`).** `azmp setup --shell pwsh` adds the integration to its `$PROFILE`. Windows PowerShell 5.1 also works if you copy the same block into its own `$PROFILE`.
+- **`cmd.exe` has no shell integration.** `azmp use`, `azmp off`, `azmp reload` and the `az-<name>` commands only exist in PowerShell, zsh, bash and fish. In `cmd`, every other command works, and you run things inside a profile with `exec`:
+  ```bat
+  azmp exec fabrikam -- az account show
+  ```
+  To switch a whole `cmd` window, set the variables from `azmp env`:
+  ```bat
+  for /f "delims=" %i in ('azmp env fabrikam -f cmd') do %i
+  ```
+  (use `%%i` inside a `.bat` file).
+- **Use a normal, non-Administrator terminal.** An elevated `cmd` starts in `C:\Windows\System32`, and profiles belong to your user account. azmp refuses to create profile folders under `C:\Windows`.
+- **`az was not found on PATH`** means the Azure CLI isn't installed, or the terminal was opened before it was installed. Install it from https://aka.ms/azcli (or `winget install Microsoft.AzureCLI`), open a new terminal, then run `azmp login <name>`.
 - Since Azure CLI 2.61, `az login` on Windows uses the **Web Account Manager (WAM)** broker. WAM keeps accounts in Windows, not in `AZURE_CONFIG_DIR`, so the account picker shows the accounts of every profile and it's easy to pick the wrong one. `azmp doctor --fix` sets `core.enable_broker_on_windows=false` in each profile's own `config`, which brings back the browser sign-in for that profile only.
 
 ## Common patterns
@@ -187,12 +215,12 @@ azmp add ci --yes --no-shell
 azmp exec ci -- az login --service-principal -u "$APP_ID" -p "$SECRET" --tenant "$TENANT"
 
 # Terraform / Bicep / kubectl with a specific identity
-azmp exec client-a -- terraform apply
+azmp exec fabrikam -- terraform apply
 azmp exec work -- az deployment group create -g rg -f main.bicep
 azmp exec work -- kubectl get pods            # with kubelogin -l azurecli
 
 # direnv instead of the built-in auto-switch
-echo 'eval "$(azure-multiprofile env client-a)"' > .envrc
+echo 'eval "$(azure-multiprofile env fabrikam)"' > .envrc
 ```
 
 ## Troubleshooting
@@ -205,6 +233,9 @@ echo 'eval "$(azure-multiprofile env client-a)"' > .envrc
 | Auto-switch doesn't happen in PowerShell 5.1 | Use PowerShell 7, or load the integration after any prompt theme (5.1 falls back to wrapping `prompt`) |
 | Every terminal is stuck on one account | An rc file exports `AZURE_CONFIG_DIR` globally. `azmp doctor` shows the file and line |
 | Wrong account offered at sign-in on Windows | `azmp doctor --fix` (WAM, see above) |
+| `'az-fabrikam' is not recognized` in `cmd.exe` | `cmd` has no shell integration. Use `azmp exec fabrikam -- az …`, or PowerShell ([Windows notes](#windows-notes)) |
+| A profile folder ended up somewhere unexpected | Fixed in 0.1.1: wizard answers are now relative to your home folder. Move it with `azmp remove <name>` then `azmp add <name>` (sign in again), or keep it. Where it lives doesn't change how you use the profile |
+| `az was not found on PATH` during `azmp add` | Install the Azure CLI, open a new terminal, then `azmp login <name>` |
 
 ## Isolation and limitations
 
