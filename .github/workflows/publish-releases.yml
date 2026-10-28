@@ -1,0 +1,67 @@
+name: publish releases
+
+# release.yml stages each version on npm and creates a *draft* GitHub release.
+# npm can't notify GitHub when a maintainer approves the staged version, so this
+# workflow polls: any draft release whose version is now installable from npm gets
+# published. Prereleases stay prereleases; a stable version is marked "Latest" only
+# if it is npm's `latest` too. Drafts for staged, rejected or failed versions are
+# left alone.
+#
+# Run it right after approving instead of waiting:  gh workflow run publish-releases.yml
+#
+# GitHub disables scheduled workflows after 60 days without repository activity;
+# re-enable it from the Actions tab if that happens.
+
+on:
+  schedule:
+    - cron: '17 6 * * *' # daily, 06:17 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: write # publish draft releases
+
+concurrency:
+  group: publish-releases
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Publish drafts that are on npm
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          PACKAGE: azure-multiprofile
+        run: |
+          set -euo pipefail
+          drafts="$(gh release list --limit 100 --json tagName,isDraft,isPrerelease \
+            --jq '.[] | select(.isDraft) | "\(.tagName) \(.isPrerelease)"')"
+          if [ -z "$drafts" ]; then
+            echo "No draft releases."
+            exit 0
+          fi
+
+          # A package with one version returns a string, not an array.
+          versions="$(npm view "$PACKAGE" versions --json 2>/dev/null || echo '[]')"
+          latest="$(npm view "$PACKAGE" dist-tags.latest 2>/dev/null || true)"
+
+          while read -r tag prerelease; do
+            version="${tag#v}"
+            if ! jq -e --arg v "$version" '(if type == "array" then . else [.] end) | any(.[]; . == $v)' \
+                <<<"$versions" >/dev/null; then
+              echo "$tag: $PACKAGE@$version is not on npm yet (staged, rejected or never built); leaving it as a draft."
+              continue
+            fi
+            flags=(--draft=false)
+            if [ "$prerelease" = "true" ]; then
+              flags+=(--prerelease --latest=false)
+            elif [ "$version" = "$latest" ]; then
+              flags+=(--latest)
+            else
+              flags+=(--latest=false)
+            fi
+            gh release edit "$tag" "${flags[@]}" >/dev/null
+            echo "$tag: published (${flags[*]})"
+            echo "- Published [$tag](https://github.com/$GH_REPO/releases/tag/$tag)" >> "$GITHUB_STEP_SUMMARY"
+          done <<<"$drafts"

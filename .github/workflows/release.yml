@@ -7,7 +7,8 @@ name: release
 # CI only *stages* the version (npm stage publish). Nothing is installable until a
 # maintainer approves it with 2FA:  npm stage list azure-multiprofile
 #                                   npm stage approve <stage-id>
-# Then publish the draft GitHub release this workflow creates.
+# The draft GitHub release this workflow creates is published automatically once the
+# version is on npm (publish-releases.yml, daily or on demand).
 #
 # Auth is npm trusted publishing (OIDC), so no NPM_TOKEN secret is stored. One-time setup:
 #   npx npm@11 trust github azure-multiprofile --repo canoas/azure-multiprofile \
@@ -88,7 +89,8 @@ jobs:
             echo "npm view azure-multiprofile dist-tags"
             echo '```'
             echo
-            echo "Then publish the draft GitHub release for $GITHUB_REF_NAME."
+            echo "The draft GitHub release for $GITHUB_REF_NAME is published automatically by the next"
+            echo "daily run after approval, or right away with: \`gh workflow run publish-releases.yml\`"
             echo
             echo '<details><summary>npm output</summary>'
             echo

@@ -72,9 +72,10 @@ git push origin main "v$(node -p "require('./package.json').version")"
 npm stage list azure-multiprofile
 npm stage approve <stage-id>          # or: npm stage reject <stage-id>
 
-# 3. Check, then publish the draft release on GitHub
+# 3. Check. The draft GitHub release is published by the next daily run of
+#    publish-releases.yml; to do it right away:
 npm view azure-multiprofile dist-tags
-gh release edit "v<version>" --draft=false
+gh workflow run publish-releases.yml
 
 # Final release: same steps, starting with `npm version patch|minor|major`
 ```
