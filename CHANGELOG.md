@@ -6,6 +6,8 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.1.2] - 2026-10-28
+
 ### Fixed
 - Piping output into a command that stops reading early (`azmp list | head -1`) no longer
   crashes with an `EPIPE` stack trace. The rest of the output is dropped and the command
@@ -43,5 +45,6 @@ prereleases on the `next` tag.
 - README: new "Profile name vs. folder" section; Windows notes cover `cmd.exe`,
   Administrator terminals and a missing `az`.
 
-[Unreleased]: https://github.com/canoas/azure-multiprofile/compare/v0.1.1...HEAD
+[Unreleased]: https://github.com/canoas/azure-multiprofile/compare/v0.1.2...HEAD
+[0.1.2]: https://github.com/canoas/azure-multiprofile/compare/v0.1.1...v0.1.2
 [0.1.1]: https://github.com/canoas/azure-multiprofile/releases/tag/v0.1.1
