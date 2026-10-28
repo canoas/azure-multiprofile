@@ -1,6 +1,6 @@
 {
   "name": "azure-multiprofile",
-  "version": "0.1.1-rc.2",
+  "version": "0.1.1-rc.3",
   "description": "Run several Azure CLI (and azd) accounts side by side, each in its own isolated profile.",
   "keywords": [
     "azure",
