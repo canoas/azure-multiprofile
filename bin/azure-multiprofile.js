@@ -1,6 +1,14 @@
 #!/usr/bin/env node
 import { main } from '../src/cli.js';
 
+// A reader that goes away early (`azmp list | head -1`) is not a failure. Drop the
+// rest of the output but keep running, so `add` still finishes its setup steps.
+for (const stream of [process.stdout, process.stderr]) {
+  stream.on('error', (e) => {
+    if (e.code !== 'EPIPE' && e.code !== 'ERR_STREAM_DESTROYED') throw e;
+  });
+}
+
 main(process.argv.slice(2)).then(
   (code) => {
     process.exitCode = code ?? 0;

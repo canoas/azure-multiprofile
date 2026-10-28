@@ -6,6 +6,11 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Fixed
+- Piping output into a command that stops reading early (`azmp list | head -1`) no longer
+  crashes with an `EPIPE` stack trace. The rest of the output is dropped and the command
+  still finishes, so `add` completes its shell setup and sign-in steps.
+
 ## [0.1.1] - 2026-10-28
 
 First stable release. `0.1.0` was never published; `0.1.1-rc.0` to `0.1.1-rc.4` were

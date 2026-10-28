@@ -2,7 +2,8 @@ import { test, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
-import { sandbox } from './helpers.js';
+import { spawn } from 'node:child_process';
+import { sandbox, BIN } from './helpers.js';
 
 let sb;
 beforeEach(() => {
@@ -277,4 +278,28 @@ test('add lists the sign-in step when sign-in was requested but did not happen',
   assert.match(r.stdout, /use the profile name "contoso"/);
   const win = sb.run(['add', 'other', '--yes', '--no-shell'], { env: { AZMP_TEST_PLATFORM: 'win32' } });
   assert.match(win.stdout, /In cmd\.exe use: azmp exec other -- az account show/);
+});
+
+// Like `azmp add x | head -1`: the reader goes away before the CLI writes.
+function runWithClosedStdout(args) {
+  return new Promise((resolve) => {
+    const child = spawn(process.execPath, [BIN, ...args], { env: sb.env, cwd: sb.home });
+    child.stdout.destroy();
+    let stderr = '';
+    child.stderr.on('data', (d) => (stderr += d));
+    child.on('close', (code) => resolve({ code, stderr }));
+  });
+}
+
+test('a closed stdout pipe is not an error, and the command still finishes', async () => {
+  const add = await runWithClosedStdout(['add', 'piped', '--yes', '--shell', 'zsh']);
+  assert.equal(add.stderr, '');
+  assert.equal(add.code, 0);
+  // Work after the first write still happened.
+  assert.ok(sb.registry().profiles.piped);
+  assert.match(sb.read('.zshrc'), /init zsh/);
+
+  const list = await runWithClosedStdout(['list']);
+  assert.equal(list.stderr, '');
+  assert.equal(list.code, 0);
 });
