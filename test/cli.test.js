@@ -257,8 +257,11 @@ test('wizard folder answers: bare names go under home, never the current directo
 });
 
 test('add refuses to put a profile under the Windows system folder', () => {
-  const sysRoot = path.join(sb.root, 'Windows');
-  const env = { AZMP_TEST_PLATFORM: 'win32', SystemRoot: sysRoot };
+  // Real Windows processes crash without their real SystemRoot, so only fake it elsewhere.
+  // The folder is refused before anything is created, so the real one is safe to use.
+  const onWindows = process.platform === 'win32';
+  const sysRoot = onWindows ? process.env.SystemRoot : path.join(sb.root, 'Windows');
+  const env = onWindows ? {} : { AZMP_TEST_PLATFORM: 'win32', SystemRoot: sysRoot };
   const r = sb.run(['add', 'client-a', '--dir', path.join(sysRoot, 'System32', 'azure-client'), '--yes', '--no-shell'], { env });
   assert.equal(r.code, 2);
   assert.match(r.stderr, /Refusing to keep sign-ins under/);
